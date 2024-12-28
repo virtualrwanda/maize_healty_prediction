@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VRT</title>
+    <script src="/static/chart.js"></script>
+    <script src="/static/jquery-3.6.0.min.js"></script>
+    <script src="/static/jquery.dataTables.min.js"></script>
+    <script src="/static/wind.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.0.1/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 flex flex-col md:flex-row">
+    <!-- Sidebar -->
+    <div class="bg-white p-7 rounded shadow-lg max-w-lg mx-auto mt-0 text-center toFixed">
+        <h1 class="text-2xl font-bold mb-4">Farm Vision</h1>
+        <button id="predict-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-700 hidden">
+            Capture and Predict
+        </button>
+      
+        <div id="prediction-result" class="mt-4 hidden">
+            <p class="text-gray-700 font-semibold">Leaf: <span id="prediction-text"></span></p>
+            <p class="text-gray-700 font-semibold">Confidence: <span id="confidence-text"></span></p>
+            <img id="prediction-image" class="mt-2 max-w-full rounded" alt="Captured Image">
+        </div>
+        
+    </div>
+</div> <!-- Add Sidebar Content Here -->
+
+    <div class="flex-1 flex flex-col p-8">
+        <!-- Sensor Data Charts Section -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-6 mt-10">
+            <!-- Individual Cards with Badges -->
+            <div class="bg-red-500 p-4 rounded-lg shadow-lg">
+                <span id="temperatureBadge" class="text-white text-lg font-semibold px-4 py-2 rounded-lg">Temperature: Loading...</span>
+            </div>
+            <div class="bg-blue-500 p-4 rounded-lg shadow-lg">
+                <span id="humidityBadge" class="text-white text-lg font-semibold px-4 py-2 rounded-lg">Moisture: Loading...</span>
+            </div>
+            <div class="bg-green-500 p-4 rounded-lg shadow-lg">
+                <span id="nitrogenBadge" class="text-white text-lg font-semibold px-4 py-2 rounded-lg">Nitrogen: Loading...</span>
+            </div>
+            <div class="bg-purple-500 p-4 rounded-lg shadow-lg">
+                <span id="potassiumBadge" class="text-white text-lg font-semibold px-4 py-2 rounded-lg">Potassium: Loading...</span>
+            </div>
+            <div class="bg-cyan-500 p-4 rounded-lg shadow-lg">
+                <span id="soilPHBadge" class="text-white text-lg font-semibold px-4 py-2 rounded-lg">Soil pH: Loading...</span>
+            </div>
+            <div class="bg-magenta-500 p-4 rounded-lg shadow-lg">
+                <span id="eclecBadge" class="text-black text-lg font-semibold px-4 py-2 rounded-lg">EC: Loading...</span>
+            </div>
+            <div class="bg-yellow-500 p-4 rounded-lg shadow-lg">
+                <span id="phosphorusBadge" class="text-white text-lg font-semibold px-4 py-2 rounded-lg">Phosphorus: Loading...</span>
+            </div>
+        </div>
+
+        <!-- Charts Section with Responsive Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-4 lg:grid-cols-3 gap-6 mt-10">
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="font-bold text-lg text-center mb-2">Temperature</h3>
+                <canvas id="temperatureChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="font-bold text-lg text-center mb-2">Moisture</h3>
+                <canvas id="humidityChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="font-bold text-lg text-center mb-2">Nitrogen</h3>
+                <canvas id="nitrogenChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="font-bold text-lg text-center mb-2">Potassium</h3>
+                <canvas id="potassiumChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="font-bold text-lg text-center mb-2">Soil pH</h3>
+                <canvas id="soilPHChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="font-bold text-lg text-center mb-2">EC</h3>
+                <canvas id="eclecChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="font-bold text-lg text-center mb-2">Phosphorus</h3>
+                <canvas id="phosphorusChart"></canvas>
+            </div>
+        </div>
+        <div class="overflow-x-auto mt-6">
+            <table class="min-w-full bg-white border border-gray-300 text-xs">
+                <thead>
+                    <tr class="bg-gray-200 text-gray-700 text-sm">
+                        <th class="px-4 py-2 border">T(°C)</th>
+                        <th class="px-4 py-2 border">M(%)</th>
+                        <th class="px-4 py-2 border">N</th>
+                        <th class="px-4 py-2 border">K</th>
+                        <th class="px-4 py-2 border">pH</th>
+                        <th class="px-4 py-2 border">EC</th>
+                        <th class="px-4 py-2 border">P</th>
+                        <th class="px-4 py-2 border">Time</th>
+                    </tr>
+                </thead>
+                <tbody id="sensorDataTableBody">
+                    <!-- Dynamic data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Camera Prediction Component -->
+     
+
+    <script>
+        // API endpoint URL for sensor data
+        const apiUrl = "/api/sensor_data";
+        // Fetch data from the API and render sensor charts
+        async function fetchAndRenderCharts() {
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+
+                // Limit to the last 20 data points
+                const recentData = data.slice(-20);
+                function formatTimestamp(timestamp) {
+                    const date = new Date(timestamp);
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                        return `${month}-${day} ${hours}:${minutes}`;
+                    }
+                const labels = recentData.map(entry => new Date(formatTimestamp(entry.timestamp)).toLocaleString());
+                const temperatures = recentData.map(entry => entry.temperature);
+                const humidity = recentData.map(entry => entry.humidity);
+                const nitrogen = recentData.map(entry => entry.nitrogen);
+                const potassium = recentData.map(entry => entry.potassium);
+               
+                const soilPH = recentData.map(entry => entry.soilPH);
+                const eclec = recentData.map(entry => entry.eclec);
+                const phosphorus = recentData.map(entry => entry.phosphorus);
+
+                function createChart(ctx, label, data, color) {
+                    return new Chart(ctx, {
+                        type: "line",
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: label,
+                                data: data,
+                                borderColor: color,
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: { title: { display: true, text: "Value" } },
+                                x: { title: { display: true, text: "Timestamp" } }
+                            }
+                        }
+                    });
+                }
+
+                createChart(document.getElementById("temperatureChart").getContext("2d"), "Temperature (°C)", temperatures, "red");
+                createChart(document.getElementById("humidityChart").getContext("2d"), "Humidity (%)", humidity, "blue");
+                createChart(document.getElementById("nitrogenChart").getContext("2d"), "Nitrogen (ppm)", nitrogen, "green");
+                createChart(document.getElementById("potassiumChart").getContext("2d"), "Potassium (ppm)", potassium, "purple");
+                createChart(document.getElementById("soilPHChart").getContext("2d"), "Soil pH", soilPH, "cyan");
+                createChart(document.getElementById("eclecChart").getContext("2d"), "EC (dS/m)", eclec, "magenta");
+                createChart(document.getElementById("phosphorusChart").getContext("2d"), "Phosphorus (ppm)", phosphorus, "brown");
+
+            } catch (error) {
+                console.error("Error fetching sensor data:", error);
+            }
+        }
+
+        // Load sensor data charts on page load
+        fetchAndRenderCharts();
+
+        // Camera Prediction Functionality
+        async function getPrediction() {
+            const resultDiv = document.getElementById('prediction-result');
+            const predictionText = document.getElementById('prediction-text');
+            const confidenceText = document.getElementById('confidence-text');
+            const predictionImage = document.getElementById('prediction-image');
+            
+            try {
+                const response = await fetch('/predict');
+                if (!response.ok) throw new Error('Prediction failed');
+                
+                const data = await response.json();
+                resultDiv.classList.remove('hidden');
+                predictionText.innerText = data.prediction;
+                confidenceText.innerText = (data.confidence * 100).toFixed(2) + '%';
+                predictionImage.src = `data:image/jpeg;base64,${data.image}`;
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Set an interval to call getPrediction() every 30 seconds
+        setInterval(getPrediction, 30000);
+
+        // Add a click event to manually trigger predictions
+        document.getElementById('predict-btn').addEventListener('click', getPrediction);
+  
+        // Fetch data from the API and render badges
+        async function fetchAndRenderBadges() {
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+
+                // Extract only the most recent entry
+                const latestEntry = data[data.length - 1]; // Latest data point
+
+                // Update the badge text for each sensor
+                document.getElementById("temperatureBadge").innerText = `Temperature: ${latestEntry.temperature}°C`;
+                document.getElementById("humidityBadge").innerText = `Humidity: ${latestEntry.humidity}%`;
+                document.getElementById("nitrogenBadge").innerText = `Nitrogen: ${latestEntry.nitrogen} ppm`;
+                document.getElementById("potassiumBadge").innerText = `Potassium: ${latestEntry.potassium} ppm`;
+               document.getElementById("soilPHBadge").innerText = `Soil pH: ${latestEntry.soilPH}`;
+                document.getElementById("eclecBadge").innerText = `EC: ${latestEntry.eclec} dS/m`;
+                document.getElementById("phosphorusBadge").innerText = `Phosphorus: ${latestEntry.phosphorus} ppm`;
+
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                // If an error occurs, display a message
+                document.getElementById("temperatureBadge").innerText = "Error loading data";
+                document.getElementById("humidityBadge").innerText = "Error loading data";
+                document.getElementById("nitrogenBadge").innerText = "Error loading data";
+                document.getElementById("potassiumBadge").innerText = "Error loading data";
+                document.getElementById("soilPHBadge").innerText = "Error loading data";
+                document.getElementById("eclecBadge").innerText = "Error loading data";
+                document.getElementById("phosphorusBadge").innerText = "Error loading data";
+            }
+        }
+
+        // Load data and render badges on page load
+        fetchAndRenderBadges();
+
+        // Optionally, refresh the data every 30 seconds
+        setInterval(fetchAndRenderBadges, 20000);
+
+
+
+    </script>
+    <script>
+            function formatTimestamp(timestamp) {
+                    const date = new Date(timestamp);
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}`;
+        }
+        // Function to fetch and display the last 20 sensor data entries
+        async function fetchSensorData() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/sensor_data');
+                const data = await response.json();
+
+                const tableBody = document.getElementById('sensorDataTableBody');
+                tableBody.innerHTML = ''; // Clear the table before populating
+
+                // Loop through the data and create a table row for each entry
+                data.slice(-20).forEach(sensor => {
+                    const row = document.createElement('tr');
+                    
+                    row.innerHTML = `
+                       
+                        <td class="px-4 py-2 border text-xs">${sensor.temperature}°C</td>
+                        <td class="px-4 py-2 border text-xs">${sensor.humidity}</td>
+                        <td class="px-4 py-2 border text-xs">${sensor.nitrogen}</td>
+                        <td class="px-4 py-2 border text-xs">${sensor.potassium}</td>
+                      
+                        <td class="px-4 py-2 border text-xs">${sensor.soilPH}</td>
+                        <td class="px-4 py-2 border text-xs">${sensor.eclec}</td>
+                        <td class="px-4 py-2 border text-xs">${sensor.phosphorus}</td>
+                        <td class="px-4 py-2 border text-xs">${formatTimestamp(sensor.timestamp)}</td>
+                    `;
+
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error fetching sensor data:', error);
+            }
+        }
+        // Fetch sensor data when the page loads
+        window.onload = fetchSensorData;
+
+
+        
+    </script>
+</body>
+</html>
